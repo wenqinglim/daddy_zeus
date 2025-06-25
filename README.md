@@ -27,13 +27,13 @@ pyenv activate daddy_zeus_env
 
 ## 3. Configuration
 
-Edit the bot file and replace:
-- `YOUR_TELEGRAM_BOT_TOKEN` with your actual bot token
+Edit the .env.example file and replace `YOUR_TELEGRAM_BOT_TOKEN` with your actual bot token.
+Save as .env
 
 ## 4. Running the Bot
 
 ```bash
-uv run weather_bot.py
+uv run bot/main.py
 ```
 
 # Telegram Weather Bot Features
