@@ -1,61 +1,45 @@
 # daddy_zeus
 Telegram bot for weather alerts
 
-# Telegram Weather Bot Setup
+# Setup Instructions
 
-## Requirements (requirements.txt)
+## 1. Prerequisites
+- [pyenv](https://github.com/pyenv/pyenv) (the setup script will install it if missing)
+- [curl](https://curl.se/) (for downloading pyenv)
 
-```
-python-telegram-bot==20.7
-aiohttp==3.9.1
-schedule==1.2.0
-sqlite3
-```
+## 2. Environment Setup (Recommended)
 
-## Setup Instructions
-
-### 1. Get Required API Keys
-
-#### Telegram Bot Token
-1. Open Telegram and search for `@BotFather`
-2. Send `/newbot` command
-3. Follow the instructions to create your bot
-4. Copy the bot token provided
-
-#### Met Office API Key
-1. Visit [Met Office API Developer Portal](https://developer.metoffice.gov.uk/)
-2. Register for a free account
-3. Subscribe to the required APIs:
-   - **Weather Forecast API** (for daily forecasts)
-   - **UV Index API** (for UV forecasts)
-4. Copy your API key from the dashboard
-
-### 2. Installation
+Run the provided setup script to automatically:
+- Install pyenv (if not present)
+- Install Python 3.11.x
+- Create a new virtual environment
+- Install [uv](https://github.com/astral-sh/uv) (if not present)
+- Install all dependencies from `pyproject.toml`
 
 ```bash
-# Install required packages
-pip install -r requirements.txt
-
-# Or install individually:
-pip install python-telegram-bot aiohttp schedule
+bash setup.sh
 ```
 
-### 3. Configuration
+After setup, activate your environment with:
+```bash
+pyenv activate daddy_zeus_env
+```
+
+## 3. Configuration
 
 Edit the bot file and replace:
 - `YOUR_TELEGRAM_BOT_TOKEN` with your actual bot token
-- `YOUR_MET_OFFICE_API_KEY` with your Met Office API key
 
-### 4. Running the Bot
+## 4. Running the Bot
 
 ```bash
-python weather_bot.py
+uv run weather_bot.py
 ```
 
-## Features Implemented
+# Telegram Weather Bot Features
 
 ### ✅ Live Weather Data
-- Fetches real-time weather data from UK Met Office
+- Fetches real-time weather data from Open-Meteo
 - Shows temperature, conditions, rain probability, wind, humidity
 - Displays UV index forecast
 
@@ -72,7 +56,7 @@ python weather_bot.py
 ### ✅ Sunny Weather Alerts
 - Configurable alerts for sunny weather
 - Morning notifications when sunny weather is forecast
-- Based on Met Office weather codes
+- Based on WMO weather codes
 
 ### ✅ Forecast Change Notifications
 - Evening alerts about forecast changes
