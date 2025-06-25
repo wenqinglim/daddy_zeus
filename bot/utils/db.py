@@ -147,3 +147,20 @@ def get_alerts_to_send(
             (current_time,),
         )
         return cursor.fetchall()
+
+
+def get_sunny_alert_users(
+    db_path: str = DB_PATH,
+) -> list[tuple[int, float, float, str]]:
+    """Get all users with an active sunny alert."""
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT DISTINCT u.user_id, u.location_lat, u.location_lon, u.location_name
+            FROM users u
+            JOIN alerts a ON u.user_id = a.user_id
+            WHERE a.alert_type = 'sunny' AND a.active = 1
+            """
+        )
+        return cursor.fetchall()

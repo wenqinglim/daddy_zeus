@@ -57,11 +57,12 @@ async def setup_sunny_alert(query: Any, user_id: int) -> None:
             "Please set your location first using /setlocation"
         )
         return
-    save_alert(user_id, "sunny", "09:00", "clear_sky")
+    save_alert(user_id, "sunny", "next_sunny_hour", "clear_sky")
     await query.edit_message_text(
-        "☀️ Sunny weather alert set!\n\n"
-        "You'll receive a notification at 9:00 AM when sunny weather is forecast "
-        "for today."
+        """
+        ☀️ Sunny weather alert set!\n\n
+        You'll receive a notification 2 hours before any sunny weather is forecast in your area.
+        """  # noqa: E501
     )
 
 
@@ -103,7 +104,7 @@ async def show_user_alerts(query: Any, user_id: int) -> None:
     alert_text = "📋 Your Active Alerts:\n\n"
     for alert_type, alert_time, _ in alerts:
         if alert_type == "sunny":
-            alert_text += f"☀️ Sunny weather alert at {alert_time}\n"
+            alert_text += "☀️ Sunny weather alert (2 hours before forecast)\n"
         elif alert_type == "rain_uv":
             alert_text += f"🌂☀️ Rain/UV reminder at {alert_time}\n"
         elif alert_type == "forecast_change":

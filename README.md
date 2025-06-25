@@ -36,6 +36,20 @@ Save as .env
 uv run bot/main.py
 ```
 
+# Setting up Sunny Alert Scheduler (Cron)
+
+To enable 1-hour-before-sunny-weather alerts, schedule the alert scheduler to run every 60 minutes using cron:
+
+1. Open your crontab:
+   ```bash
+   crontab -e
+   ```
+2. Add this line (adjust the path as needed):
+   ```cron
+   */60 * * * * cd /path/to/your/project && uv run bot/alert_scheduler.py
+   ```
+   This will check for upcoming sunny weather and send alerts 1 hour before, if needed.
+
 # Telegram Weather Bot Features
 
 ### ✅ Live Weather Data
