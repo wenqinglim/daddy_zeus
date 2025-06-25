@@ -55,11 +55,16 @@ fi
 # --- INSTALL REQUIREMENTS ---
 if [ -f "pyproject.toml" ]; then
   info "Installing dependencies from pyproject.toml using uv..."
-  uv sync
+  uv sync --dev
 else
   error "No pyproject.toml found!"
   exit 1
 fi
+
+# --- ENABLE PRE-COMMIT HOOKS ---
+info "Installing pre-commit and enabling git hooks..."
+uv pip install pre-commit
+pre-commit install
 
 info "Setup complete!"
 echo "To activate your environment in the future, run:"
