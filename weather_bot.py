@@ -1,6 +1,8 @@
 import os
 import json
 import asyncio
+from config import BOT_TOKEN
+
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -635,14 +637,12 @@ Commands:
         logger.info("Starting Weather Bot...")
         self.application.run_polling()
 
-# Configuration
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Get from @BotFather
 
 if __name__ == "__main__":
     if BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
         print("Please set your bot token!")
         print("1. Get bot token from @BotFather on Telegram")
-        print("2. Update the BOT_TOKEN variable in the script")
+        print("2. Update the BOT_TOKEN variable in config.py")
     else:
         bot = WeatherBot(BOT_TOKEN)
         bot.run()
