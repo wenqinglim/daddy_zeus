@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+import aiohttp  # type: ignore
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update  # type: ignore
 from telegram.ext import (
     Application,
@@ -252,34 +253,83 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     location_name = f"Lat: {lat:.2f}, Lon: {lon:.2f}"
     save_user_location(user_id, username, lat, lon, location_name)
     await update.message.reply_text(
-        f"📍 Location saved: {location_name}\n"
-        "\nUse /weather to get your local weather forecast!"
+        f"""📍 Location saved: {location_name}\n
+        \nUse /weather to get your local weather forecast!"""
     )
 
 
+async def geocode_city(city_name: str) -> tuple[float, float, str] | None:
+    """
+    Resolve a city name to (lat, lon, display_name) using Open-Meteo geocoding API.
+    """
+    url = "https://geocoding-api.open-meteo.com/v1/search"
+    params = {"name": city_name, "count": 1, "language": "en"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = data.get("results")
+                    if results and len(results) > 0:
+                        r = results[0]
+                        lat = r["latitude"]
+                        lon = r["longitude"]
+                        name = r.get("name", city_name)
+                        country = r.get("country", "")
+                        display_name = f"{name}, {country}" if country else name
+                        return float(lat), float(lon), display_name
+    except Exception as e:
+        logger.error(f"Geocoding error: {e}")
+    return None
+
+
+# TODO: test location command
 async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
-    if context.args is None or len(context.args) != 2:
+    if not context.args:
         await update.message.reply_text(
-            "Please provide latitude and longitude:\n/location <latitude> <longitude>"
-            "\n\nExample: /location 51.5074 -0.1278"
+            """
+            Please provide a city name or latitude and longitude:\n
+            /location <city name>\n
+            /location <latitude> <longitude>
+            \n\nExamples: /location London or /location 51.5074 -0.1278"""
         )
         return
-    try:
-        lat = float(context.args[0])
-        lon = float(context.args[1])
-        if update.effective_user is None:
+    # Try to parse as lat/lon first
+    if len(context.args) == 2:
+        try:
+            lat = float(context.args[0])
+            lon = float(context.args[1])
+            if update.effective_user is None:
+                return
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "Unknown"
+            location_name = f"Lat: {lat:.2f}, Lon: {lon:.2f}"
+            save_user_location(user_id, username, lat, lon, location_name)
+            await update.message.reply_text(
+                f"""📍 Location saved: {location_name}\n
+                \nUse /weather to get your local weather forecast!"""
+            )
             return
-        user_id = update.effective_user.id
-        username = update.effective_user.username or "Unknown"
-        location_name = f"Lat: {lat:.2f}, Lon: {lon:.2f}"
-        save_user_location(user_id, username, lat, lon, location_name)
+        except ValueError:
+            pass  # Fall through to city name
+    # Otherwise, treat as city name
+    city_name = " ".join(context.args)
+    geocode = await geocode_city(city_name)
+    if geocode is None:
         await update.message.reply_text(
-            f"📍 Location saved: {location_name}\n"
-            "\nUse /weather to get your local weather forecast!"
+            f"""Sorry, I couldn't find a location for '{city_name}'.
+            Please try another city or use coordinates."""
         )
-    except ValueError:
-        await update.message.reply_text(
-            "Invalid coordinates. Please provide valid numbers."
-        )
+        return
+    lat, lon, display_name = geocode
+    if update.effective_user is None:
+        return
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "Unknown"
+    save_user_location(user_id, username, lat, lon, display_name)
+    await update.message.reply_text(
+        f"""📍 Location saved: {display_name}\n\n
+        Use /weather to get your local weather forecast!"""
+    )
