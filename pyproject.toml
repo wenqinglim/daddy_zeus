@@ -3,13 +3,13 @@ name = "daddy_zeus"
 version = "0.1.0"
 description = "Telegram bot for weather alerts using Open-Meteo and Telegram Bot API."
 requires-python = ">=3.11"
-
-[tool.uv]
 dependencies = [
     "python-telegram-bot==20.7",
     "aiohttp==3.9.1",
     "schedule==1.2.0",
 ]
+
+[project.optional-dependencies]
 dev-dependencies = [
     "black>=23.0.0",
     "isort>=5.12.0",
