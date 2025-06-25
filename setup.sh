@@ -62,8 +62,7 @@ else
 fi
 
 # --- ENABLE PRE-COMMIT HOOKS ---
-info "Installing pre-commit and enabling git hooks..."
-uv pip install pre-commit
+info "Enabling git hooks..."
 pre-commit install
 
 info "Setup complete!"
