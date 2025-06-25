@@ -62,9 +62,16 @@ else
 fi
 
 # --- ENABLE PRE-COMMIT HOOKS ---
-info "Enabling git hooks..."
+info "Installing pre-commit and enabling git hooks..."
 pre-commit install
+
+# --- CREATE .env.example IF NEEDED ---
+if [ ! -f ".env.example" ]; then
+  echo "BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN" > .env.example
+  info ".env.example created. Please copy to .env and set your Telegram bot token."
+fi
 
 info "Setup complete!"
 echo "To activate your environment in the future, run:"
-echo "  pyenv activate $VENV_NAME" 
+echo "  pyenv activate $VENV_NAME"
+echo "Remember to set your BOT_TOKEN environment variable (see .env.example) before running the bot!" 
