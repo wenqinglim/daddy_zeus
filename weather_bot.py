@@ -17,9 +17,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 class WeatherBot:
-    def __init__(self, bot_token: str, met_api_key: str):
+    def __init__(self, bot_token: str):
         self.bot_token = bot_token
-        self.met_api_key = met_api_key
         self.application = Application.builder().token(bot_token).build()
         self.db_path = "weather_bot.db"
         self.init_database()
@@ -66,53 +65,46 @@ class WeatherBot:
         conn.close()
 
     async def get_weather_data(self, lat: float, lon: float) -> Optional[Dict]:
-        """Fetch weather data from Met Office API"""
-        base_url = "https://api-metoffice.apiconnect.ibmcloud.com/metoffice/production/v0"
+        """Fetch weather data from Open-Meteo API"""
+        base_url = "https://api.open-meteo.com/v1/forecast"
         
-        # Get site list first to find nearest site
-        sites_url = f"{base_url}/forecasts/point/daily"
         params = {
             'latitude': lat,
             'longitude': lon,
-            'includeLocationName': 'true'
-        }
-        
-        headers = {
-            'X-IBM-Client-Id': self.met_api_key,
-            'Accept': 'application/json'
+            'current': 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,uv_index',
+            'daily': 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code',
+            'timezone': 'auto',
+            'forecast_days': 7
         }
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(sites_url, params=params, headers=headers) as response:
+                async with session.get(base_url, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
                         return data
                     else:
-                        logger.error(f"Met Office API error: {response.status}")
+                        logger.error(f"Open-Meteo API error: {response.status}")
                         return None
         except Exception as e:
             logger.error(f"Error fetching weather data: {e}")
             return None
 
     async def get_uv_forecast(self, lat: float, lon: float) -> Optional[Dict]:
-        """Get UV index forecast from Met Office"""
-        base_url = "https://api-metoffice.apiconnect.ibmcloud.com/metoffice/production/v0"
-        uv_url = f"{base_url}/uv-index/forecast"
+        """Get UV index forecast from Open-Meteo"""
+        base_url = "https://api.open-meteo.com/v1/forecast"
         
         params = {
             'latitude': lat,
-            'longitude': lon
-        }
-        
-        headers = {
-            'X-IBM-Client-Id': self.met_api_key,
-            'Accept': 'application/json'
+            'longitude': lon,
+            'daily': 'uv_index_max',
+            'timezone': 'auto',
+            'forecast_days': 7
         }
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(uv_url, params=params, headers=headers) as response:
+                async with session.get(base_url, params=params) as response:
                     if response.status == 200:
                         return await response.json()
                     return None
@@ -207,61 +199,70 @@ Commands:
     def format_weather_message(self, weather_data: Dict, uv_data: Dict, location_name: str) -> str:
         """Format weather data into a readable message"""
         try:
-            # Extract relevant information from Met Office API response
-            features = weather_data.get('features', [])
-            if not features:
+            # Extract current weather from Open-Meteo API response
+            current = weather_data.get('current', {})
+            daily = weather_data.get('daily', {})
+            
+            if not current or not daily:
                 return "No weather data available."
             
-            properties = features[0].get('properties', {})
-            location = properties.get('location', {})
-            model_run_date = properties.get('modelRunDate', '')
-            time_series = properties.get('timeSeries', [])
+            # Current weather
+            current_temp = current.get('temperature_2m', 'N/A')
+            apparent_temp = current.get('apparent_temperature', 'N/A')
+            humidity = current.get('relative_humidity_2m', 'N/A')
+            precip_prob = current.get('precipitation_probability', 'N/A')
+            wind_speed = current.get('wind_speed_10m', 'N/A')
+            wind_direction = current.get('wind_direction_10m', 'N/A')
+            weather_code = current.get('weather_code', 'N/A')
+            uv_index = current.get('uv_index', 'N/A')
             
-            if not time_series:
-                return "No forecast data available."
+            # Today's forecast
+            daily_temps = daily.get('temperature_2m_max', [])
+            daily_mins = daily.get('temperature_2m_min', [])
+            daily_precip = daily.get('precipitation_probability_max', [])
+            daily_weather = daily.get('weather_code', [])
             
-            today_forecast = time_series[0]
+            max_temp = daily_temps[0] if daily_temps else 'N/A'
+            min_temp = daily_mins[0] if daily_mins else 'N/A'
+            today_precip = daily_precip[0] if daily_precip else 'N/A'
+            today_weather = daily_weather[0] if daily_weather else weather_code
             
-            # Extract today's weather
-            max_temp = today_forecast.get('dayMaxScreenTemperature', 'N/A')
-            min_temp = today_forecast.get('nightMinScreenTemperature', 'N/A')
-            weather_type = today_forecast.get('significantWeatherCode', 'N/A')
-            precip_prob = today_forecast.get('probOfPrecipitation', 'N/A')
-            wind_speed = today_forecast.get('midday10MWindSpeed', 'N/A')
-            wind_direction = today_forecast.get('midday10MWindDirection', 'N/A')
-            humidity = today_forecast.get('middayRelativeHumidity', 'N/A')
-            
-            # UV Index
-            uv_index = "N/A"
-            if uv_data and 'forecasts' in uv_data:
-                uv_forecasts = uv_data['forecasts']
-                if uv_forecasts:
-                    uv_index = uv_forecasts[0].get('index', 'N/A')
-            
-            # Weather type descriptions
+            # Weather type descriptions (WMO codes)
             weather_descriptions = {
-                0: "Clear night", 1: "Sunny day", 2: "Partly cloudy (night)",
-                3: "Partly cloudy (day)", 4: "Not used", 5: "Mist",
-                6: "Fog", 7: "Cloudy", 8: "Overcast",
-                9: "Light rain shower (night)", 10: "Light rain shower (day)",
-                11: "Drizzle", 12: "Light rain", 13: "Heavy rain shower (night)",
-                14: "Heavy rain shower (day)", 15: "Heavy rain"
+                0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+                45: "Foggy", 48: "Depositing rime fog",
+                51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
+                56: "Light freezing drizzle", 57: "Dense freezing drizzle",
+                61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+                66: "Light freezing rain", 67: "Heavy freezing rain",
+                71: "Slight snow fall", 73: "Moderate snow fall", 75: "Heavy snow fall",
+                77: "Snow grains",
+                80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
+                85: "Slight snow showers", 86: "Heavy snow showers",
+                95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
             }
             
-            weather_desc = weather_descriptions.get(weather_type, "Unknown")
+            weather_desc = weather_descriptions.get(today_weather, "Unknown")
+            
+            # Wind direction
+            wind_dirs = {
+                0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW"
+            }
+            wind_dir = wind_dirs.get(round(wind_direction / 45) * 45, "N/A") if isinstance(wind_direction, (int, float)) else "N/A"
             
             message = f"""
 🌤️ <b>Weather for {location_name}</b>
 
-🌡️ <b>Temperature:</b> {max_temp}°C / {min_temp}°C
+🌡️ <b>Current:</b> {current_temp}°C (feels like {apparent_temp}°C)
+🌡️ <b>Today:</b> {max_temp}°C / {min_temp}°C
 ☁️ <b>Conditions:</b> {weather_desc}
-🌧️ <b>Rain Chance:</b> {precip_prob}%
-💨 <b>Wind:</b> {wind_speed} mph {wind_direction}
+🌧️ <b>Rain Chance:</b> {today_precip}%
+💨 <b>Wind:</b> {wind_speed} km/h {wind_dir}
 💧 <b>Humidity:</b> {humidity}%
 ☀️ <b>UV Index:</b> {uv_index}
 
 <b>Recommendations:</b>
-{self.get_recommendations(weather_type, precip_prob, uv_index)}
+{self.get_recommendations(today_weather, today_precip, uv_index)}
             """
             
             return message.strip()
@@ -270,7 +271,7 @@ Commands:
             logger.error(f"Error in format_weather_message: {e}")
             return "Error formatting weather data."
 
-    def get_recommendations(self, weather_type: int, precip_prob: int, uv_index) -> str:
+    def get_recommendations(self, weather_code: int, precip_prob: int, uv_index) -> str:
         """Generate weather-based recommendations"""
         recommendations = []
         
@@ -288,10 +289,14 @@ Commands:
                 recommendations.append("🧴 Consider sunscreen (moderate UV)")
         
         # Weather-specific recommendations
-        if weather_type in [6, 5]:  # Fog/Mist
+        if weather_code in [45, 48]:  # Fog
             recommendations.append("🚗 Drive carefully - reduced visibility")
-        elif weather_type in [13, 14, 15]:  # Heavy rain
+        elif weather_code in [65, 67, 82]:  # Heavy rain
             recommendations.append("🏠 Stay indoors if possible")
+        elif weather_code in [95, 96, 99]:  # Thunderstorm
+            recommendations.append("⚡ Avoid outdoor activities")
+        elif weather_code in [71, 73, 75, 85, 86]:  # Snow
+            recommendations.append("❄️ Dress warmly and watch for ice")
         
         return "\n".join(recommendations) if recommendations else "No special recommendations"
 
@@ -536,19 +541,18 @@ Commands:
     def generate_sunny_alert(self, weather_data: Dict, location_name: str) -> str:
         """Generate sunny weather alert message"""
         try:
-            features = weather_data.get('features', [])
-            if not features:
+            daily = weather_data.get('daily', {})
+            if not daily:
                 return ""
             
-            time_series = features[0].get('properties', {}).get('timeSeries', [])
-            if not time_series:
+            weather_codes = daily.get('weather_code', [])
+            if not weather_codes:
                 return ""
             
-            today_forecast = time_series[0]
-            weather_type = today_forecast.get('significantWeatherCode', 99)
+            today_weather = weather_codes[0]
             
-            # Check if it's sunny (codes 1, 3 are sunny/partly cloudy)
-            if weather_type in [1, 3]:
+            # Check if it's sunny (codes 0, 1, 2 are clear/partly cloudy)
+            if today_weather in [0, 1, 2]:
                 return f"☀️ <b>Sunny Weather Alert!</b>\n\nIt's going to be sunny in {location_name} today! Perfect weather to get outside and enjoy the sunshine! 🌞"
             
             return ""
@@ -559,23 +563,14 @@ Commands:
     def generate_rain_uv_alert(self, weather_data: Dict, uv_data: Dict, location_name: str) -> str:
         """Generate rain/UV reminder alert"""
         try:
-            features = weather_data.get('features', [])
-            if not features:
+            current = weather_data.get('current', {})
+            daily = weather_data.get('daily', {})
+            
+            if not current or not daily:
                 return ""
             
-            time_series = features[0].get('properties', {}).get('timeSeries', [])
-            if not time_series:
-                return ""
-            
-            today_forecast = time_series[0]
-            precip_prob = today_forecast.get('probOfPrecipitation', 0)
-            
-            # UV Index
-            uv_index = 0
-            if uv_data and 'forecasts' in uv_data:
-                uv_forecasts = uv_data['forecasts']
-                if uv_forecasts:
-                    uv_index = uv_forecasts[0].get('index', 0)
+            precip_prob = current.get('precipitation_probability', 0)
+            uv_index = current.get('uv_index', 0)
             
             alerts = []
             
@@ -642,13 +637,12 @@ Commands:
 
 # Configuration
 BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Get from @BotFather
-MET_API_KEY = "YOUR_MET_OFFICE_API_KEY"  # Get from Met Office API
 
 if __name__ == "__main__":
-    if BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN" or MET_API_KEY == "YOUR_MET_OFFICE_API_KEY":
-        print("Please set your bot token and Met Office API key!")
+    if BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
+        print("Please set your bot token!")
         print("1. Get bot token from @BotFather on Telegram")
-        print("2. Get Met Office API key from: https://developer.metoffice.gov.uk/")
+        print("2. Update the BOT_TOKEN variable in the script")
     else:
-        bot = WeatherBot(BOT_TOKEN, MET_API_KEY)
+        bot = WeatherBot(BOT_TOKEN)
         bot.run()
